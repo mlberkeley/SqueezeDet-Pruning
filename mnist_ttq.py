@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
 
 # skeleton from https://github.com/pytorch/examples/blob/master/mnist/main.py
-from __future__ import print_function, division
 import argparse
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
-from torch.autograd import Function, Variable
+from torch.autograd import Variable
+from ttq import Quantize
 
 
+## DNN
 # baseline: Average loss: 0.0989, Accuracy: 9805/10000 (98%)
 # with TTQ: Average loss: 0.0710, Accuracy: 9805/10000 (98%)
+
+## CNN
+# baseline: Average loss: 0.0235, Accuracy: 9922/10000 (99%)
+# with TTQ: Average loss: 0.0410, Accuracy: 9878/10000 (99%)
 
 
 # Training settings
@@ -26,8 +30,8 @@ parser.add_argument('--epochs', type=int, default=10, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                     help='learning rate (default: 0.001)')
-# parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
-#                     help='SGD momentum (default: 0.5)')
+parser.add_argument('--cnn', action='store_true', default=False,
+                    help='use a simple CNN')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=0, metavar='S',
@@ -38,9 +42,13 @@ args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
 if args.seed:
-    torch.manual_seed(args.seed)
     if args.cuda:
         torch.cuda.manual_seed(args.seed)
+    else:
+        torch.manual_seed(args.seed)
+
+if args.cuda:
+    torch.manual_seed(torch.cuda.initial_seed())
 
 kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
 data_location = 'mnist_data'
@@ -58,67 +66,13 @@ test_loader = torch.utils.data.DataLoader(
                    ])),
     batch_size=args.test_batch_size, shuffle=True, **kwargs)
 
-
-class TTLinear(nn.Linear):
-    def __init__(self, in_features, out_features, bias=True):
-        self.do_reset = False    # nasty hack: superclass constructor calls reset_parameters, but defer that call until we create our parameters
-        super(TTLinear, self).__init__(in_features, out_features, bias=bias)
-        self.do_reset = True
-        self.W_p = nn.Parameter(torch.Tensor(1))
-        self.W_n = nn.Parameter(torch.Tensor(1))
-        self.t = 0.05
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        if self.do_reset:
-            super(TTLinear, self).reset_parameters()
-            stdv = 1 / math.sqrt(self.weight.size(1))   # copied from superclass
-            self.W_p.data.uniform_(0, stdv)
-            self.W_n.data.uniform_(-stdv, 0)
-
-    def forward(self, input):
-        quantized_weight, quantized_bias = Quantize(self.t)(self.W_p, self.W_n, self.weight, self.bias)
-        return F.linear(input, quantized_weight, quantized_bias)
-
-class Quantize(Function):
-    def __init__(self, t):
-        super(Quantize, self).__init__()
-        self.t = t
-
-    def forward(self, W_p, W_n, *weights):
-        self.save_for_backward(W_p, W_n, *weights) # save_for_backward fails if you pass in non-argument tensors
-        max_weight = max(weight.abs().max() for weight in weights)
-        threshold = self.t * max_weight
-        p_masks = [weight.gt(threshold).float() for weight in weights]
-        n_masks = [weight.lt(-threshold).float() for weight in weights]
-        quantized_weights = tuple(p_masks[i] * W_p + n_masks[i] * W_n for i in range(len(weights)))
-        self._threshold = threshold
-        self._p_masks = p_masks
-        self._n_masks = n_masks
-        return quantized_weights
-
-    def backward(self, *grad_outputs):
-        # grad_outputs are gradient of loss with respect to quantized weights
-        W_p, W_n, *weights = self.saved_tensors
-        threshold = self._threshold
-        p_masks = self._p_masks
-        n_masks = self._n_masks
-        z_masks = [weight.abs().le(threshold).float() for weight in weights]
-        quantized_weights_ = [p_masks[i] * W_p + n_masks[i] * -W_n for i in range(len(weights))] # note the extra minus
-        out = [(quantized_weights_[i] + z_masks[i]) * grad_outputs[i] for i in range(len(weights))]
-        W_p_grad = W_p.clone()
-        W_n_grad = W_n.clone()
-        W_p_grad[0] = sum((p_masks[i] * grad_outputs[i]).sum() for i in range(len(weights)))
-        W_n_grad[0] = sum((n_masks[i] * grad_outputs[i]).sum() for i in range(len(weights)))
-        return (W_p_grad, W_n_grad, *out)
-
-class Net(nn.Module):
+class DNN(nn.Module):
     def __init__(self):
-        super(Net, self).__init__()
-        self.fc1 = TTLinear(784, 512)
-        self.fc2 = TTLinear(512, 512)
-        self.fc3 = TTLinear(512, 512)
-        self.fc4 = TTLinear(512, 10)
+        super().__init__()
+        self.fc1 = Quantize(nn.Linear)(784, 512)
+        self.fc2 = Quantize(nn.Linear)(512, 512)
+        self.fc3 = Quantize(nn.Linear)(512, 512)
+        self.fc4 = Quantize(nn.Linear)(512, 10)
 
     def forward(self, x):
         x = x.view(-1, 784)
@@ -131,8 +85,27 @@ class Net(nn.Module):
         x = F.log_softmax(self.fc4(x))
         return x
 
+class CNN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = Quantize(nn.Conv2d)(1, 10, kernel_size=5)
+        self.conv2 = Quantize(nn.Conv2d)(10, 20, kernel_size=5)
+        self.fc1 = Quantize(nn.Linear)(320, 128)
+        self.fc2 = Quantize(nn.Linear)(128, 10)
 
-model = Net()
+    def forward(self, x):
+        x = self.conv1(x)
+        x = F.relu(F.max_pool2d(x, 2))
+        x = self.conv2(x)
+        x = F.dropout2d(x, training=self.training)
+        x = F.relu(F.max_pool2d(x, 2))
+        x = x.view(-1, 320)
+        x = F.relu(self.fc1(x))
+        x = F.dropout(x, training=self.training)
+        x = F.log_softmax(self.fc2(x))
+        return x
+
+model = CNN() if args.cnn else DNN()
 if args.cuda:
     model.cuda()
 
