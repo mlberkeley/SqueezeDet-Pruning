@@ -51,7 +51,7 @@ if args.cuda:
     torch.manual_seed(torch.cuda.initial_seed())
 
 kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
-data_location = 'mnist_data'
+data_location = 'data/mnist'
 train_loader = torch.utils.data.DataLoader(
     datasets.MNIST(data_location, train=True, download=True,
                    transform=transforms.Compose([
