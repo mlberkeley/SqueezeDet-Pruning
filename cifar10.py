@@ -10,6 +10,8 @@ from torch.autograd import Variable
 from torchvision import datasets, transforms
 from resnet_cifar10_ttq import resnet18
 from squeezenet import SqueezeNet
+from alexnet import AlexNet
+from vgg import VGG
 
 
 parser = argparse.ArgumentParser(description='CIFAR-10')
@@ -55,9 +57,9 @@ classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 
-model = SqueezeNet(version=1.1, num_classes=10, small_input=True, use_ttq=args.ttq)
+# model = SqueezeNet(version=1.1, num_classes=10, small_input=True, use_ttq=args.ttq)
 # model = resnet18()
-
+model = AlexNet(use_ttq=True, num_classes=10)
 
 def fix_state(valid, new):
     for k, v in valid.items():

@@ -58,7 +58,7 @@ def Quantize(cls, t=0.05):
                 super().reset_parameters()
                 stdv = 1 / math.sqrt(self.weight.size(1))   # taken from nn.Linear.reset_parameters
                 self.W_p.data.uniform_(0, stdv)
-                self.W_n.data.uniform_(-stdv, 0)
+                self.W_n.data.uniform_(0, stdv)
 
     return Quantized
 
@@ -73,7 +73,7 @@ class QuantizeWeights(Function):
         threshold = self.t * max_weight
         p_masks = [weight.gt(threshold).float() for weight in weights]
         n_masks = [weight.lt(-threshold).float() for weight in weights]
-        quantized_weights = tuple(p_masks[i] * W_p + n_masks[i] * W_n for i in range(len(weights)))
+        quantized_weights = tuple(p_masks[i] * W_p - n_masks[i] * W_n for i in range(len(weights)))
         self._threshold = threshold
         self._p_masks = p_masks
         self._n_masks = n_masks
@@ -86,12 +86,11 @@ class QuantizeWeights(Function):
         p_masks = self._p_masks
         n_masks = self._n_masks
         z_masks = [weight.abs().le(threshold).float() for weight in weights]
-        quantized_weights_ = [p_masks[i] * W_p + n_masks[i] * -W_n for i in range(len(weights))] # note the extra minus
-        out = [(quantized_weights_[i] + z_masks[i]) * grad_outputs[i] for i in range(len(weights))]
+        out = [(p_masks[i] * W_p + n_masks[i] * W_n + z_masks[i]) * grad_outputs[i] for i in range(len(weights))]
         W_p_grad = W_p.clone()
         W_n_grad = W_n.clone()
         W_p_grad[0] = sum((p_masks[i] * grad_outputs[i]).sum() for i in range(len(weights)))
-        W_n_grad[0] = sum((n_masks[i] * grad_outputs[i]).sum() for i in range(len(weights)))
+        W_n_grad[0] = sum((-n_masks[i] * grad_outputs[i]).sum() for i in range(len(weights)))
         return (W_p_grad, W_n_grad, *out)
 
 class OldLinear(nn.Linear):
