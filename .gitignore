@@ -2,3 +2,4 @@ __pycache__
 *.pyc
 data
 *.pth
+.ipynb_checkpoints

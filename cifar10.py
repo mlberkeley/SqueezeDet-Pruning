@@ -11,7 +11,7 @@ from torchvision import datasets, transforms
 from resnet_cifar10_ttq import resnet18
 from squeezenet import SqueezeNet
 from alexnet import AlexNet
-from vgg import VGG
+from vgg import vgg16
 
 
 parser = argparse.ArgumentParser(description='CIFAR-10')
@@ -36,8 +36,8 @@ use_cuda = torch.cuda.is_available()
 if not use_cuda:
     print('warning: cuda not available')
 
-normalize = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-#normalize = transforms.Normalize((0.491399689874, 0.482158419622, 0.446530924224), (0.247032237587, 0.243485133253, 0.261587846975))
+#normalize = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+normalize = transforms.Normalize((0.491399689874, 0.482158419622, 0.446530924224), (0.247032237587, 0.243485133253, 0.261587846975))
 train_transform = transforms.Compose((transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, padding=2), transforms.ToTensor(), normalize))
 test_transform = transforms.Compose((transforms.ToTensor(), normalize))
 
@@ -57,9 +57,9 @@ classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 
-# model = SqueezeNet(version=1.1, num_classes=10, small_input=True, use_ttq=args.ttq)
+model = SqueezeNet(version=1.1, num_classes=10, small_input=True, use_ttq=args.ttq)
 # model = resnet18()
-model = AlexNet(use_ttq=True, num_classes=10)
+# model = AlexNet(use_ttq=True, num_classes=10)
 
 def fix_state(valid, new):
     for k, v in valid.items():
@@ -83,8 +83,7 @@ if use_cuda:
     model.cuda()
 
 criterion = F.cross_entropy
-optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, nesterov=True, weight_decay=args.weight_decay)
-scheduler = lr_scheduler.StepLR(optimizer, step_size=15, gamma=0.1)
+optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
 def train(epoch):
     model.train()
@@ -134,12 +133,11 @@ def test():
         100 * correct / len(testloader.dataset)))
 
 for epoch in range(1, args.epochs + 1):
-    scheduler.step()
     start = time.time()
     train(epoch)
     delta = time.time() - start
     print('{:.2f}s/epoch'.format(delta))
-    torch.save(model.state_dict(), 'model.pth')
+    torch.save(model.state_dict(), 'model1.pth')
     test()
 
 class_correct = list(0. for i in range(10))

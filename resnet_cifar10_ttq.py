@@ -13,9 +13,7 @@ import torch.nn.functional as F
 
 from torch.autograd import Variable
 
-from ttq import Quantize
-#Quantize = lambda x: x
-
+Quantize = None
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -102,8 +100,14 @@ class ResNet(nn.Module):
         out = self.linear(out)
         return out
 
+Quantize = None
 
-def resnet18():
+def resnet18(use_ttq=False):
+    global Quantize
+    if use_ttq:
+        from ttq import Quantize
+    else:
+        Quantize = lambda x: x
     return ResNet(BasicBlock, [2,2,2,2])
 
 def resnet34():
