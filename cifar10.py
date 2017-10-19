@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 import time
 import torch
@@ -38,7 +39,7 @@ if not use_cuda:
 
 #normalize = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 normalize = transforms.Normalize((0.491399689874, 0.482158419622, 0.446530924224), (0.247032237587, 0.243485133253, 0.261587846975))
-train_transform = transforms.Compose((transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, padding=2), transforms.ToTensor(), normalize))
+train_transform = transforms.Compose((transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, padding=4), transforms.ToTensor(), normalize))
 test_transform = transforms.Compose((transforms.ToTensor(), normalize))
 
 loader_args = {'num_workers': 4}
@@ -57,8 +58,8 @@ classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 #model = AlexNet(num_classes=10, small_input=True, use_ttq=args.ttq)
-#model = SqueezeNet(version=1.1, num_classes=10, small_input=True, use_ttq=args.ttq)
 model = SqueezeNet(version=1.1, num_classes=10, small_input=True, use_ttq=args.ttq)
+#model = resnet18(use_ttq=args.ttq)
 
 def fix_state(valid, new):
     for k, v in valid.items():
@@ -71,7 +72,7 @@ def fix_state(valid, new):
             elif parts[-1] == 'W_n':
                 if not k in new:
                     new[k] = torch.Tensor(1)
-                    new[k][0] = valid['.'.join(parts[:-1] + ['weight'])].min() / 2
+                    new[k][0] = -valid['.'.join(parts[:-1] + ['weight'])].min() / 2
     return new
 
 #dct = torch.load('resnet.pth')

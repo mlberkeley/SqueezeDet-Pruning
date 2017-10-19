@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 import torch.utils.model_zoo as model_zoo
-from ttq import Quantize as Quantize_
+from ttq import Quantize as Quantize_, TTQ
 
 __all__ = ['SqueezeNet', 'squeezenet1_0', 'squeezenet1_1']
 
@@ -105,9 +105,9 @@ class SqueezeNet(nn.Module):
                     init.kaiming_uniform(m.weight.data)
                 if m.bias is not None:
                     m.bias.data.zero_()
-                if type(m).__name__.startswith('TTQ'):
+                if isinstance(m, TTQ):
                     m.W_p.data[0] = m.weight.data.max() / 2
-                    m.W_n.data[0] = m.weight.data.min() / 2
+                    m.W_n.data[0] = -m.weight.data.min() / 2
 
     def forward(self, x):
         x = self.features(x)
