@@ -56,10 +56,9 @@ testloader = torch.utils.data.DataLoader(testset, shuffle=False, batch_size=args
 classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
-
+#model = AlexNet(num_classes=10, small_input=True, use_ttq=args.ttq)
+#model = SqueezeNet(version=1.1, num_classes=10, small_input=True, use_ttq=args.ttq)
 model = SqueezeNet(version=1.1, num_classes=10, small_input=True, use_ttq=args.ttq)
-# model = resnet18()
-# model = AlexNet(use_ttq=True, num_classes=10)
 
 def fix_state(valid, new):
     for k, v in valid.items():

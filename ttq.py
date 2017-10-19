@@ -5,6 +5,10 @@ import torch.nn.functional as F
 from torch.autograd import Function
 
 
+class TTQ():
+    # dummy class to identify quantized layers
+    pass
+
 def Quantize(cls, t=0.05):
     """Quantizes a layer.
 
@@ -14,9 +18,9 @@ def Quantize(cls, t=0.05):
     """
     class QuantizeMeta(type):
         def __new__(self, name, bases, dct):
-            # Change base class to `cls` and prepend `TTQ` to the class name.
+            # Change base classes to (`cls`, `TTQ`) and prepend `TTQ` to the class name.
             dct.pop('__qualname__', None)
-            return super().__new__(self, 'TTQ{}'.format(cls.__name__), (cls,), dct)
+            return super().__new__(self, 'TTQ{}'.format(cls.__name__), (cls, TTQ), dct)
 
     class Quantized(metaclass=QuantizeMeta):
         """QuantizeMeta makes this class inherit from `cls` instead of `object`."""
