@@ -15,19 +15,19 @@ from vgg import vgg16
 
 
 parser = argparse.ArgumentParser(description='CIFAR-10')
-parser.add_argument('--batch-size', type=int, default=256, metavar='N',
+parser.add_argument('--batch-size', type=int, default=256,
                             help='input batch size for training (default: 256)')
-parser.add_argument('--test-batch-size', type=int, default=1024, metavar='N',
+parser.add_argument('--test-batch-size', type=int, default=1024,
                             help='input batch size for testing (default: 1024)')
-parser.add_argument('--epochs', type=int, default=10, metavar='N',
+parser.add_argument('--epochs', type=int, default=10,
                             help='number of epochs to train (default: 10)')
-parser.add_argument('--lr', type=float, default=1e-3, metavar='LR',
+parser.add_argument('--lr', type=float, default=1e-3,
                             help='learning rate (default: 1e-3)')
-parser.add_argument('--momentum', type=float, default=0.9, metavar='LR',
-                            help='momentum (default: 0.9)')
-parser.add_argument('--weight-decay', type=float, default=1e-6, metavar='LR',
-                            help='weight decay (default: 1e-6)')
-parser.add_argument('--log-interval', type=int, default=20, metavar='N',
+# parser.add_argument('--momentum', type=float, default=0.9,
+#                             help='momentum (default: 0.9)')
+parser.add_argument('--weight-decay', type=float, default=0,
+                            help='weight decay (default: 0)')
+parser.add_argument('--log-interval', type=int, default=20,
                             help='how many batches to wait before logging training status')
 parser.add_argument('--ttq', action='store_true', default=False)
 args = parser.parse_args()
@@ -82,13 +82,13 @@ if use_cuda:
     model.cuda()
 
 criterion = F.cross_entropy
-optimizer = optim.Adam(model.parameters(), lr=args.lr)
+optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
 def train(epoch):
     model.train()
     running_loss = 0
     running_total = 0
-    # correct = 0
+    correct = 0
     for i, (inputs, labels) in enumerate(trainloader):
         if use_cuda:
             inputs, labels = inputs.cuda(), labels.cuda()
@@ -98,8 +98,8 @@ def train(epoch):
 
         # forward + backward + optimize
         outputs = model(inputs)
-        # pred = outputs.data.max(1, keepdim=True)[1]
-        # correct += pred.eq(labels.data.view_as(pred)).cpu().sum()
+        pred = outputs.data.max(1, keepdim=True)[1]
+        correct += pred.eq(labels.data.view_as(pred)).cpu().sum()
         loss = criterion(outputs, labels)
         optimizer.zero_grad()
         loss.backward()
@@ -110,9 +110,9 @@ def train(epoch):
         running_total += len(inputs)
         num = i + 1
         if num % args.log_interval == 0 or num == len(trainloader):
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.4f}, Accuracy: {:.2f}%'.format(
                 epoch, running_total, len(trainloader.dataset),
-                100 * running_total / len(trainloader.dataset), running_loss / num))
+                100 * running_total / len(trainloader.dataset), running_loss / num, 100 * correct / running_total))
 
 def test():
     model.eval()
@@ -127,16 +127,16 @@ def test():
         pred = outputs.data.max(1, keepdim=True)[1] # get the index of the max
         correct += pred.eq(labels.data.view_as(pred)).cpu().sum()
 
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        running_loss / len(testloader.dataset), correct, len(testloader.dataset),
-        100 * correct / len(testloader.dataset)))
+    print('\nTest set: Loss: {:.4f}, Accuracy: {:.2f}% ({}/{})\n'.format(
+        running_loss / len(testloader.dataset), 100 * correct / len(testloader.dataset),
+        correct, len(testloader.dataset)))
 
 for epoch in range(1, args.epochs + 1):
     start = time.time()
     train(epoch)
     delta = time.time() - start
     print('{:.2f}s/epoch'.format(delta))
-    torch.save(model.state_dict(), 'model1.pth')
+    torch.save(model.state_dict(), 'model.pth')
     test()
 
 class_correct = list(0. for i in range(10))
