@@ -1,0 +1,3 @@
+[submodule "squeezeDet"]
+	path = squeezeDet
+	url = ./squeezeDet/
